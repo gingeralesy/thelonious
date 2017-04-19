@@ -30,24 +30,21 @@
          (value (/ (mod position wave-length) (* 2.0s0 wave-length))))
     (if (< 1.0s0 value) (- value 2.0s0) value)))
 
+(defun normalize-wave-spec (wave)
+  (etypecase wave
+    (list wave)
+    (number (setf wave (list :frequency wave)))
+    (function (setf wave (list :function wave)))))
+
 (defun generate-wave (waves array sample-rate)
-  (let ((frequency 440)
-        (function #'sine-wave)
-        (amplitude 1.0s0))
-    (dotimes (i (array-dimension array 0))
-      (loop for wave in waves
-            do (let ((wave wave))
-                 (unless (typep wave 'list)
-                   (etypecase wave
-                     (number (setf wave (list :frequency wave)))
-                     (function (setf wave (list :function wave)))))
-                 (setf frequency (or (getf wave :frequency) frequency)
-                       function (or (getf wave :function) function)
-                       amplitude (or (when (getf wave :amplitude)
-                                       (min 1.0s0 (max 0.0s0 (getf wave :amplitude))))
-                                     amplitude))
-                 (incf (aref array i) (* amplitude (funcall function i frequency sample-rate))))
-            finally (setf (aref array i) (/ (aref array i) (length waves)))))))
+  (loop with div = (/ (length waves))
+        for spec in waves
+        for wave = (normalize-wave-spec spec)
+        for frequency = (getf wave :frequency 440) then (getf wave :frequency frequency)
+        for function = (getf wave :function #'sine-wave) then (getf wave :function function)
+        for amplitude = (min 1.0s0 (max 0.0s0 (getf wave :amplitude 1.0s0))) then (min 1.0s0 (max 0.0s0 (getf wave :amplitude amplitude)))
+        do (dotimes (i (length array))
+             (incf (aref array i) (* div amplitude (funcall function i frequency sample-rate))))))
 
 (defun play (waves duration)
   (unless *out* (initialize-playback))
