@@ -1,6 +1,9 @@
+(in-package #:thelonious)
+
 (defvar *out* NIL)
 
-(defun intialize-playback ()
+(defun initialize-playback ()
+  (when *out* (cl-out123:disconnect *out*))
   (setf *out* (cl-out123:connect (cl-out123:make-output NIL :channels 1
                                                             :encoding :float)
                                  :driver "pulse")))
@@ -64,9 +67,32 @@
             finally (setf (aref output i) (/ (aref output i) (length waves)))))
     output))
 
-(defun play (wave-type frequency duration &key (sample-rate (cl-out123:playback-format *out*)))
-  (cl-out123:start *out* :rate sample-rate)
+(defun play (wave-types frequencies duration &optional amplitudes)
+  (unless *out* (initialize-playback))
+  (unless (typep wave-types 'list)
+    (setf wave-types (list wave-types)))
+  (unless (typep frequencies 'list)
+    (setf frequencies (list frequencies)))
+  (cl-out123:start *out*)
   (unwind-protect
-       (cl-out123:play *out* (funcall wave-type duration :frequency frequency
-                                                         :sample-rate sample-rate))
+       (let ((sample-rate (cl-out123:playback-format *out*)))
+         (cl-out123:play *out*
+                         (combine-waves (loop for frequency in frequencies
+                                              for wave-type in wave-types
+                                              collect
+                                              (let ((wave-func
+                                                      (ecase (values (alexandria:make-keyword wave-type))
+                                                        ((keyword:sine keyword:sine-wave)
+                                                         #'sine-wave)
+                                                        ((keyword:square keyword:square-wave)
+                                                         #'square-wave)
+                                                        ((keyword:triangle keyword:triangle-wave)
+                                                         #'triangle-wave)
+                                                        ((keyword:sawtooth keyword:sawtooth-wave)
+                                                         #'sawtooth-wave))))
+                                                (funcall wave-func
+                                                         duration
+                                                         :frequency frequency
+                                                         :sample-rate sample-rate)))
+                                        amplitudes)))
     (cl-out123:stop *out*)))

@@ -1,7 +1,7 @@
 (in-package #:cl-user)
 (defpackage #:thelonious
   (:use #:cl)
-  (:export "play"))
+  (:export #:play))
 (in-package #:thelonious)
 
 (defun queue ()
