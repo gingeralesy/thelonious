@@ -81,15 +81,11 @@
                                               for wave-type in wave-types
                                               collect
                                               (let ((wave-func
-                                                      (ecase (values (alexandria:make-keyword wave-type))
-                                                        ((keyword:sine keyword:sine-wave)
-                                                         #'sine-wave)
-                                                        ((keyword:square keyword:square-wave)
-                                                         #'square-wave)
-                                                        ((keyword:triangle keyword:triangle-wave)
-                                                         #'triangle-wave)
-                                                        ((keyword:sawtooth keyword:sawtooth-wave)
-                                                         #'sawtooth-wave))))
+                                                      (ecase (alexandria:make-keyword wave-type)
+                                                        ((:sine :sine-wave) #'sine-wave)
+                                                        ((:square :square-wave) #'square-wave)
+                                                        ((:triangle :triangle-wave) #'triangle-wave)
+                                                        ((:sawtooth :sawtooth-wave) #'sawtooth-wave))))
                                                 (funcall wave-func
                                                          duration
                                                          :frequency frequency
