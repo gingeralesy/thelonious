@@ -36,20 +36,21 @@
         (amplitude 1.0s0))
     (dotimes (i (array-dimension array 0))
       (loop for wave in waves
-            do (setf frequency (or (getf wave :frequency) frequency)
-                     function (or (getf wave :function) function)
-                     amplitude (or (when (getf wave :amplitude)
-                                     (min 1.0s0 (max 0.0s0 (getf wave :amplitude))))
-                                   amplitude))
-            do (incf (aref array i) (* amplitude (funcall function i frequency sample-rate)))
+            do (let ((wave wave))
+                 (unless (typep wave 'list)
+                   (etypecase wave
+                     (integer (setf wave (list :frequency waves)))
+                     (function (setf wave (list :function waves)))))
+                 (setf frequency (or (getf wave :frequency) frequency)
+                       function (or (getf wave :function) function)
+                       amplitude (or (when (getf wave :amplitude)
+                                       (min 1.0s0 (max 0.0s0 (getf wave :amplitude))))
+                                     amplitude))
+                 (incf (aref array i) (* amplitude (funcall function i frequency sample-rate))))
             finally (setf (aref array i) (/ (aref array i) (length waves)))))))
 
 (defun play (waves duration)
   (unless *out* (initialize-playback))
-  (unless (typep waves 'list)
-    (etypecase waves
-      (integer (setf waves (list :frequency waves)))
-      (function (setf waves (list :function waves)))))
   (cl-out123:start *out*)
   (unwind-protect
        (let* ((sample-rate (cl-out123:playback-format *out*))
