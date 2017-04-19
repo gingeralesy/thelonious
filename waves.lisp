@@ -8,87 +8,54 @@
                                                             :encoding :float)
                                  :driver "pulse")))
 
-(defun sine-wave (duration &key (frequency 440) (sample-rate 44100))
-  (let ((length (* duration sample-rate)))
-    (make-array length :element-type 'single-float
-                       :initial-contents
-                       (let* ((constant (* 2 (coerce pi 'single-float)))
-                              (pos-increase (/ frequency sample-rate))
-                              (pos-limit (- 1 pos-increase)))
-                         (loop for i from 1 to length
-                               for pos = 0 then (+ pos pos-increase
-                                                   (if (<= pos pos-limit) 0 -1))
-                               collect (sin (* pos constant)))))))
+(defun sine-wave (position frequency sample-rate)
+  (let ((wave-length (floor (/ sample-rate frequency))))
+    (sin (* (/ (mod position wave-length) wave-length) (coerce pi 'single-float) 2))))
 
-(defun square-wave (duration &key (frequency 440) (sample-rate 44100))
-  (let ((length (* duration sample-rate))
-        (switch (/ sample-rate frequency 2)))
-    (make-array length :element-type 'single-float
-                       :initial-contents
-                       (loop for i from 1 to length
-                             collect (if (= 0 (mod (floor (/ i switch)) 2)) 1.0s0 -1.0s0)))))
+(defun square-wave (position frequency sample-rate)
+  (let ((wave-length (floor (/ sample-rate frequency))))
+    (if (< (mod position wave-length) (/ wave-length 2)) 1.0s0 -1.0s0)))
 
-(defun triangle-wave (duration &key (frequency 440) (sample-rate 44100))
-  (let ((length (floor (* duration sample-rate))))
-    (make-array length :element-type 'single-float
-                       :initial-contents
-                       (let* ((y-inc (/ 4.0s0 (/ sample-rate frequency)))
-                              (max-limit (- 1.0s0 y-inc))
-                              (min-limit (+ -1.0s0 y-inc))
-                              (going-up T))
-                         (loop for i from 0 to (1- length)
-                               for y = -1.0s0 then (+ y (if going-up y-inc (- y-inc)))
-                               when (< max-limit y) do (setf going-up NIL)
-                               when (< y min-limit) do (setf going-up T)
-                               collect y)))))
+(defun triangle-wave (position frequency sample-rate)
+  (let* ((wave-length (floor (/ sample-rate frequency)))
+         (quarter-wave (/ wave-length 4.0s0))
+         (position (mod position wave-length)))
+    (cond
+      ((< position quarter-wave) (* position 4.0s0))
+      ((<= (- wave-length quarter-wave) position) (* (- position wave-length) 4.0s0))
+      (T (- 1.0s0 (* (- position quarter-wave) 4.0s0))))))
 
-(defun sawtooth-wave (duration &key (frequency 440) (sample-rate 44100))
-  (let ((length (* duration sample-rate)))
-    (make-array length :element-type 'single-float
-                       :initial-contents
-                       (let* ((constant (/ 2.0s0 (/ sample-rate frequency))))
-                         (loop for i from 1 to length
-                               for y = 1.0s0 then (- y constant)
-                               when (< y -1.0s0) do (incf y 2.0s0)
-                               collect y)))))
+(defun sawtooth-wave (position frequency sample-rate)
+  (let* ((wave-length (floor (/ sample-rate frequency)))
+         (value (* (mod position wave-length) 2.0s0)))
+    (if (< 1.0s0 value) (- value 2.0s0) value)))
 
-(defun combine-waves (waves &optional amplitudes)
-  (dotimes (i (- (length waves) (length amplitudes)))
-    (push 1 amplitudes))
-  (let ((output (make-array (loop for wave in waves
-                                  maximizing (array-dimension wave 0) into max
-                                  finally (return max))
-                            :element-type 'single-float
-                            :initial-element 0.0s0)))
-    (dotimes (i (array-dimension output 0))
+(defun generate-wave (waves array sample-rate)
+  (let ((frequency 440)
+        (function #'sine-wave)
+        (amplitude 1.0s0))
+    (dotimes (i (array-dimension array 0))
       (loop for wave in waves
-            for amp in amplitudes
-            do (setf (aref output i) (+ (aref output i) (* amp (aref wave i))))
-            finally (setf (aref output i) (/ (aref output i) (length waves)))))
-    output))
+            do (setf frequency (or (getf wave :frequency) frequency)
+                     function (or (getf wave :function) function)
+                     amplitude (or (when (getf wave :amplitude)
+                                     (min 1.0s0 (max 0.0s0 (getf wave :amplitude))))
+                                   amplitude))
+            do (incf (aref array i) (* amplitude (funcall function i frequency sample-rate)))
+            finally (setf (aref array i) (/ (aref array i) (length waves)))))))
 
-(defun play (wave-types frequencies duration &optional amplitudes)
+(defun play (waves duration)
   (unless *out* (initialize-playback))
-  (unless (typep wave-types 'list)
-    (setf wave-types (list wave-types)))
-  (unless (typep frequencies 'list)
-    (setf frequencies (list frequencies)))
+  (unless (typep waves 'list)
+    (etypecase waves
+      (integer (setf waves (list :frequency waves)))
+      (function (setf waves (list :function waves)))))
   (cl-out123:start *out*)
   (unwind-protect
-       (let ((sample-rate (cl-out123:playback-format *out*)))
-         (cl-out123:play *out*
-                         (combine-waves (loop for frequency in frequencies
-                                              for wave-type in wave-types
-                                              collect
-                                              (let ((wave-func
-                                                      (ecase (alexandria:make-keyword wave-type)
-                                                        ((:sine :sine-wave) #'sine-wave)
-                                                        ((:square :square-wave) #'square-wave)
-                                                        ((:triangle :triangle-wave) #'triangle-wave)
-                                                        ((:sawtooth :sawtooth-wave) #'sawtooth-wave))))
-                                                (funcall wave-func
-                                                         duration
-                                                         :frequency frequency
-                                                         :sample-rate sample-rate)))
-                                        amplitudes)))
+       (let* ((sample-rate (cl-out123:playback-format *out*))
+              (data (make-array (floor (* duration sample-rate))
+                                :element-type 'single-float
+                                :initial-element 0.0s0)))
+         (generate-wave waves data sample-rate)
+         (cl-out123:play *out* data))
     (cl-out123:stop *out*)))
