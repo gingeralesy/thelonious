@@ -1,32 +1,37 @@
 (in-package #:cl-user)
 (defpackage #:thelonious
-  (:use #:cl))
+  (:use #:cl)
+  (:export "play"))
 (in-package #:thelonious)
 
 (defun queue ()
   (cons NIL NIL))
 
-(defun queue-empty-p (notes)
-  (null (car notes)))
+(defun queue-empty-p (queue)
+  (null (car queue)))
 
-(defun queue-peek (notes)
-  (caar notes))
+(defun queue-peek (queue)
+  (caar queue))
 
-(defun queue-length (notes)
-  (length (car notes)))
+(defun queue-length (queue)
+  (length (car queue)))
 
-(defun queue-push (notes note)
-  (if (queue-empty-p notes)
-      (setf (car notes) (cons note NIL)
-            (cdr notes) (car notes))
-      (setf (cddr notes) (cons note NIL)
-            (cdr notes) (cddr notes))))
+(defun queue-append (queue items)
+  (loop for item in items
+        do (queue-push queue item)))
 
-(defun queue-pop (notes)
-  (unless (queue-empty-p notes)
-    (let ((val (caar notes)))
-      (setf (car notes) (cdar notes))
+(defun queue-push (queue item)
+  (if (queue-empty-p queue)
+      (setf (car queue) (cons item NIL)
+            (cdr queue) (car queue))
+      (setf (cddr queue) (cons item NIL)
+            (cdr queue) (cddr queue))))
+
+(defun queue-pop (queue)
+  (unless (queue-empty-p queue)
+    (let ((val (caar queue)))
+      (setf (car queue) (cdar queue))
       val)))
 
-(defun queue-as-list (notes)
-  (copy-list (cdr notes)))
+(defun queue-as-list (queue)
+  (copy-list (cdr queue)))

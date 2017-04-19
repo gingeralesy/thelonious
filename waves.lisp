@@ -65,4 +65,8 @@
     output))
 
 (defun play (wave-type frequency duration &key (sample-rate (cl-out123:playback-format *out*)))
-  (cl-out123:start *out* :rate sample-rate))
+  (cl-out123:start *out* :rate sample-rate)
+  (unwind-protect
+       (cl-out123:play *out* (funcall wave-type duration :frequency frequency
+                                                         :sample-rate sample-rate))
+    (cl-out123:stop *out*)))

@@ -68,7 +68,30 @@
 (defmethod initialize-instance :after ((part part) &key name)
   (unless name (setf (name part) "Unnamed part")))
 
+(defmethod notes ((part part))
+  (let ((notes))
+    (loop for phrase in (phrases part)
+          do (if notes
+                 (setf (cdr (last notes)) (notes phrase))
+                 (setf notes (notes phrase))))))
+
+(defmethod add-note ((part part) (note note) &key)
+  (error "TODO"))
+
+(defmethod (setf pan) (value (part part))
+  (loop for phrase in (phrases part)
+        do (loop for note in (notes phrase)
+                 do (setf (pan note) value))))
+
+(defmethod (setf dynamic) (value (part part))
+  (loop for phrase in (phrases part)
+        do (loop for note in (notes phrase)
+                 do (setf (dynamic note) value))))
+
 (defmethod clean ((part part))
+  (loop for phrase in (phrases part)
+        do (clean phrase))
   (setf (phrases part) NIL))
 
-(defclass score (note-container))
+(defclass score (note-container)
+  ((parts :initarg :parts :accessor parts)))
