@@ -39,8 +39,8 @@
             do (let ((wave wave))
                  (unless (typep wave 'list)
                    (etypecase wave
-                     (integer (setf wave (list :frequency waves)))
-                     (function (setf wave (list :function waves)))))
+                     (number (setf wave (list :frequency wave)))
+                     (function (setf wave (list :function wave)))))
                  (setf frequency (or (getf wave :frequency) frequency)
                        function (or (getf wave :function) function)
                        amplitude (or (when (getf wave :amplitude)
