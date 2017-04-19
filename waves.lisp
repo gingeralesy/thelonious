@@ -34,9 +34,9 @@
   (let ((frequency 440)
         (function #'sine-wave)
         (amplitude 1.0s0))
-    (dotimes (i (array-dimension array 0))
-      (loop for wave in waves
-            do (let ((wave wave))
+    (loop for wave in waves
+          do (dotimes (i (array-dimension array 0))
+               (let ((wave wave))
                  (unless (typep wave 'list)
                    (etypecase wave
                      (number (setf wave (list :frequency wave)))
@@ -47,7 +47,7 @@
                                        (min 1.0s0 (max 0.0s0 (getf wave :amplitude))))
                                      amplitude))
                  (incf (aref array i) (* amplitude (funcall function i frequency sample-rate))))
-            finally (setf (aref array i) (/ (aref array i) (length waves)))))))
+               (setf (aref array i) (/ (aref array i) (length waves)))))))
 
 (defun play (waves duration)
   (unless *out* (initialize-playback))
