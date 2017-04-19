@@ -19,15 +19,16 @@
 (defun triangle-wave (position frequency sample-rate)
   (let* ((wave-length (floor (/ sample-rate frequency)))
          (quarter-wave (/ wave-length 4.0s0))
-         (position (mod position wave-length)))
+         (position (mod position wave-length))
+         (multiplier (/ 4.0s0 wave-length)))
     (cond
-      ((< position quarter-wave) (* position 4.0s0))
-      ((<= (- wave-length quarter-wave) position) (* (- position wave-length) 4.0s0))
-      (T (- 1.0s0 (* (- position quarter-wave) 4.0s0))))))
+      ((< position quarter-wave) (* position multiplier))
+      ((<= (- wave-length quarter-wave) position) (* (- position wave-length) multiplier))
+      (T (- 1.0s0 (* (- position quarter-wave) multiplier))))))
 
 (defun sawtooth-wave (position frequency sample-rate)
   (let* ((wave-length (floor (/ sample-rate frequency)))
-         (value (* (mod position wave-length) 2.0s0)))
+         (value (/ (mod position wave-length) (* 2.0s0 wave-length))))
     (if (< 1.0s0 value) (- value 2.0s0) value)))
 
 (defun generate-wave (waves array sample-rate)
