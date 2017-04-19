@@ -5,8 +5,7 @@
 (defun initialize-playback ()
   (when *out* (cl-out123:disconnect *out*))
   (setf *out* (cl-out123:connect (cl-out123:make-output NIL :channels 1
-                                                            :encoding :float)
-                                 :driver "pulse")))
+                                                            :encoding :float))))
 
 (defun sine-wave (position frequency sample-rate)
   (let ((wave-length (floor (/ sample-rate frequency))))
