@@ -55,17 +55,17 @@
     (double-float number)
     (number (coerce number 'double-float))))
 
-(defun ensure-pitch (tuning)
-  (etypecase tuning
-    (symbol (case tuning
+(defun ensure-pitch (pitch)
+  (etypecase pitch
+    (symbol (case pitch
               ((german austrian) 443.0d0)
               (swiss 442.0d0)
               (von-kajaran 444.0d0)
               (T 440.0d0)))
-    (number (ensure-double-float tuning))))
+    (number (ensure-double-float pitch))))
 
-(defun piano-key->pitch (key &key (tuning 440.0d0) (offset 0.0d0))
-  (coerce (+ (ensure-double-float offset)
-             (* (ensure-pitch tuning)
+(defun piano-key->pitch (key &key (tuning 440.0d0))
+  (coerce (+ (- (ensure-pitch tuning) 440.0d0)
+             (* 440.0d0
                 (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
           'single-float))
