@@ -14,4 +14,4 @@
   :depends-on (:cl-out123 :cl-ppcre)
   :components ((:file "module")
                (:file "waves")
-               (:file "thelonious")))
+               (:file "notation")))

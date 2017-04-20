@@ -66,6 +66,5 @@
 
 (defun piano-key->pitch (key &key (tuning 440.0d0))
   (coerce (+ (- (ensure-pitch tuning) 440.0d0)
-             (* 440.0d0
-                (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
+             (* 440.0d0 (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
           'single-float))
