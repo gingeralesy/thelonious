@@ -7,7 +7,9 @@
   (error 'invalid-key-notation-error :text (format NIL "No such key ~a." key)))
 
 (defun note-order (note)
-  (let ((note (char note 0)))
+  (let ((note (etypecase note
+                (string (char note 0))
+                (char note))))
     (ecase note
       (#\C 1)
       (#\D 2)
