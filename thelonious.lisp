@@ -1,97 +1,69 @@
 (in-package #:thelonious)
 
-(defclass note () ())
-(defgeneric in-millis (note)
-  (:documentation "Returns the duration of this note in milliseconds."))
+(define-condition invalid-key-notation-error (error)
+  ((text :initarg :text :reader text)))
 
-(defclass note-container () ())
-(defgeneric clean (note-container)
-  (:documentation "Removes all sub-pieces from this container."))
-(defgeneric notes (note-container)
-  (:documentation "Gets the notes in this container."))
-(defgeneric add-note (note-container note &key)
-  (:documentation "Add note to a container."))
-(defgeneric (setf pan) (value note-container)
-  (:documentation "Set the pan for all notes in the container."))
+(defun invalid-key-notation-error (key)
+  (error 'invalid-key-notation-error :text (format NIL "No such key ~a." key)))
 
-(defclass phrase (note-container) ())
-(defclass part (note-container) ())
-(defclass score (note-container) ())
+(defun note-order (note)
+  (let ((note (char note 0)))
+    (ecase note
+      (#\C 1)
+      (#\D 2)
+      (#\E 3)
+      (#\F 4)
+      (#\G 5)
+      (#\A 6)
+      ((#\B #\H) 7))))
 
-(defclass note ()
-  ((pitch :initform (error "A note must have a pitch.")
-          :initarg :pitch
-          :accessor pitch)
-   (duration :initform (error "A note must have a duration.")
-             :initarg :duration
-             :accessor duration)
-   (dynamic :initform 1 :initarg :dynamic :accessor dynamic)
-   (pan :initform 0.5 :initarg :pan :accessor pan)
-   (in-millis :reader in-millis))
-  (:documentation "A representation of a note in standard music notation."))
+(defun ensure-piano-key (key)
+  (cond
+    ((typep key 'integer) key)
+    ((or (typep key 'string) (typep key 'symbol) (typep key 'keyword))
+     ;; Notation is the standard English piano notation ([A-G])([#sbf])?([0-8])
+     ;; where A-G is the note, # and s mean sharp, b and f mean flat, and 0-8 mean octave.
+     ;; This is then converted into standard piano key number that is from 1 to 88.
+     (multiple-value-bind (key-string groups)
+         (cl-ppcre:scan-to-strings "([A-G])([#SBF])?([0-8])"
+                                   (format NIL "~:@(~a~)" key))
+       (unless key-string (invalid-key-notation-error key))
+       (let ((note (char (aref groups 0) 0))
+             (flat-p (when (and (aref groups 1) (or (string= "B" (aref groups 1))
+                                                    (string= "F" (aref groups 1))))))
+             (sharp-p (when (and (aref groups 1) (or (string= "#" (aref groups 1))
+                                                     (string= "S" (aref groups 1))))))
+             (octave (aref groups 2)))
+         (unless (and note octave)
+           (invalid-key-notation-error key-string))
+         (+ (cond (flat-p -1) (sharp-p 1) (T 0))
+            (cond
+              ((= 0 octave)
+               (cond ((string= "A" note) 1)
+                     ((string= "B" note) 3)
+                     (T (invalid-key-notation-error key))))
+              ((= 8 octave)
+               (cond ((string= "C" note) 88)
+                     (T (invalid-key-notation-error key))))
+              (T (+ 4 (* octave 7) (note-order note))))))))
+    (T (invalid-key-notation-error key))))
 
-(defmethod in-millis ((note note)))
+(defun ensure-double-float (number)
+  (etypecase number
+    (double-float number)
+    (number (coerce number 'double-float))))
 
-(defclass note-container ()
-  ((name :initarg name :accessor name))
-  (:documentation "A container in the standard music notation with notes in it."))
+(defun ensure-pitch (tuning)
+  (etypecase tuning
+    (symbol (case tuning
+              ((german austrian) 443.0d0)
+              (swiss 442.0d0)
+              (von-kajaran 444.0d0)
+              (T 440.0d0)))
+    (number (ensure-double-float tuning))))
 
-(defclass phrase (note-container)
-  ((notes :initform (queue))
-   (start-time :initform 0 :initarg :start :accessor start))
-  (:documentation "A representation of a phrase in standard music notation."))
-
-(defmethod initialize-instance :after ((phrase phrase) &key notes name)
-  (loop for note in notes do (add-note phrase note))
-  (unless name (setf (name phrase) "Unnamed phrase")))
-
-(defmethod notes ((phrase phrase))
-  (queue-as-list (slot-value phrase 'notes)))
-
-(defmethod add-note ((phrase phrase) (note note) &key)
-  (queue-push (notes phrase) note))
-
-(defmethod (setf pan) (value (phrase phrase))
-  (loop for note in (notes phrase) do (setf (pan note) value)))
-
-(defmethod (setf dynamic) (value (phrase phrase))
-  (loop for note in (notes phrase) do (setf (dynamic note) value)))
-
-(defmethod clean ((phrase phrase))
-  (setf (slot-value phrase 'notes) (queue)))
-
-(defclass part (note-container)
-  ((channel :initform 0 :initarg :channel :accessor channel)
-   (intrument :initform :piano :initarg :instrument :accessor :instrument)
-   (phrases :initarg :phrases :accessor phrases)))
-
-(defmethod initialize-instance :after ((part part) &key name)
-  (unless name (setf (name part) "Unnamed part")))
-
-(defmethod notes ((part part))
-  (let ((notes))
-    (loop for phrase in (phrases part)
-          do (if notes
-                 (setf (cdr (last notes)) (notes phrase))
-                 (setf notes (notes phrase))))))
-
-(defmethod add-note ((part part) (note note) &key)
-  (error "TODO"))
-
-(defmethod (setf pan) (value (part part))
-  (loop for phrase in (phrases part)
-        do (loop for note in (notes phrase)
-                 do (setf (pan note) value))))
-
-(defmethod (setf dynamic) (value (part part))
-  (loop for phrase in (phrases part)
-        do (loop for note in (notes phrase)
-                 do (setf (dynamic note) value))))
-
-(defmethod clean ((part part))
-  (loop for phrase in (phrases part)
-        do (clean phrase))
-  (setf (phrases part) NIL))
-
-(defclass score (note-container)
-  ((parts :initarg :parts :accessor parts)))
+(defun piano-key->pitch (key &key (tuning 440.0d0) (offset 0.0d0))
+  (coerce (+ (ensure-double-float offset)
+             (* (ensure-pitch tuning)
+                (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
+          'single-float))

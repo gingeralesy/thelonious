@@ -11,7 +11,7 @@
   :version "0.1"
   :licence "GNU Lesser General Public License (version 2.1)"
   :description "For handling audio I/O in a midi-like manner for audio generation systems."
-  :depends-on (:cl-out123)
+  :depends-on (:cl-out123 :cl-ppcre)
   :components ((:file "module")
                (:file "waves")
                (:file "thelonious")))
