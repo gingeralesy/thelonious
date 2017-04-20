@@ -4,7 +4,7 @@
   (cl-ppcre:create-scanner "^([A-G])([bf♭]?)([#s]?)([0-8])$" :case-insensitive-mode T))
 
 (defparameter *german-notation-regex*
-  (cl-ppcre:create-scanner "^(,{0,2})(([AC-H])|([ac-h]))(i?s)?(e?s)?(['’]{0,5})?$"
+  (cl-ppcre:create-scanner "^(,{0,2})(([AC-H])|([ac-h]))(is)?(e?s)?(['’]{0,5})?$"
                            :case-insensitive-mode NIL))
 
 (defparameter *black-keys-on-piano* '(2 4 7 9 11))
@@ -57,7 +57,23 @@
 (defun notation (note octave &key flat-p sharp-p (notation 'english))
   (ecase notation
     (english (format NIL "~a~a~a"
-                     note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))))
+                     note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))
+    (german
+     (if (< octave 3)
+         (format NIL "~{~a~}~:@(~a~)~a"
+                 (loop repeat (- 2 octave) collecting #\,)
+                 (if (and flat-p (eql note #\H)) #\B note)
+                 (cond ((and flat-p (not (eql #\H note)))
+                        (if (or (eql #\A note) (eql #\E note)) "s" "es"))
+                       (sharp-p "is")
+                       (T "")))
+         (format NIL "~(~a~)~a~{~a~}"
+                 (if (and flat-p (eql note #\H)) #\B note)
+                 (cond ((and flat-p (not (eql #\H note)))
+                        (if (or (eql #\A note) (eql #\E note)) "s" "es"))
+                       (sharp-p "is")
+                       (T ""))
+                 (loop repeat (- octave 3) collecting #\´))))))
 
 (defun ensure-german-piano-key (key-string groups)
   (when key-string
