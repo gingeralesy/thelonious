@@ -60,20 +60,18 @@
                      note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))
     (german
      (if (< octave 3)
-         (format NIL "~{~a~}~:@(~a~)~a"
-                 (loop repeat (- 2 octave) collecting #\,)
-                 (if (and flat-p (eql note #\H)) #\B note)
-                 (cond ((and flat-p (not (eql #\H note)))
-                        (if (or (eql #\A note) (eql #\E note)) "s" "es"))
-                       (sharp-p "is")
-                       (T "")))
-         (format NIL "~(~a~)~a~{~a~}"
-                 (if (and flat-p (eql note #\H)) #\B note)
-                 (cond ((and flat-p (not (eql #\H note)))
-                        (if (or (eql #\A note) (eql #\E note)) "s" "es"))
-                       (sharp-p "is")
-                       (T ""))
-                 (loop repeat (- octave 3) collecting #\´))))))
+         (let ((sharpness (cond ((and flat-p (not (eql #\H note)))
+                                 (if (or (eql #\A note) (eql #\E note)) "s" "es"))
+                                (sharp-p "is")
+                                (T ""))))
+           (format NIL "~{~a~}~:@(~a~)~a"
+                   (loop repeat (- 2 octave) collecting #\,)
+                   (if (and flat-p (eql note #\H)) #\B note)
+                   sharpness)
+           (format NIL "~(~a~)~a~{~a~}"
+                   (if (and flat-p (eql note #\H)) #\B note)
+                   sharpness
+                   (loop repeat (- octave 3) collecting #\´)))))))
 
 (defun ensure-german-piano-key (key-string groups)
   (when key-string
