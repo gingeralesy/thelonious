@@ -54,6 +54,20 @@
          (english #\B)
          (german #\H)))))
 
+(defun ensure-double-float (number)
+  (etypecase number
+    (double-float number)
+    (number (coerce number 'double-float))))
+
+(defun ensure-tuning (tuning)
+  (etypecase tuning
+    (symbol (case tuning
+              ((german austrian) 443.0d0)
+              (swiss 442.0d0)
+              (von-kajaran 444.0d0)
+              (T 440.0d0)))
+    (number (ensure-double-float tuning))))
+
 (defun notation (note octave &key flat-p sharp-p (notation 'english))
   (ecase notation
     (english (format NIL "~a~a~a"
@@ -73,87 +87,66 @@
                    sharpness
                    (loop repeat (- octave 3) collecting #\´)))))))
 
-(defun ensure-german-piano-key (key-string groups)
-  (when key-string
-    (let ((sharp-p (when (< 0 (length (aref groups 4))) (aref groups 4)))
-          (flat-p (when (< 0 (length (aref groups 5))) (aref groups 5)))
-          (low (when (< 0 (length (aref groups 2))) (length (aref groups 0))))
-          (high (when (< 0 (length (aref groups 3))) (length (aref groups 6)))))
-      (when (or (and high low) (and flat-p sharp-p))
-        (invalid-key-notation-error key-string))
-      (let ((note (string-upcase (if low (aref groups 2) (aref groups 3)))))
-        (+ (cond (flat-p -1) (sharp-p 1) (T 0))
-           (cond
-             ((and low (= low 3)
-                   (string= "A" note)) 1)
-             ((and low (= low 3)
-                   (string= "B" note)) 3)
-             ((and high (= high 6)
-                   (string= "C" note)) 88)
-             ((and low (< low 3))
-              (format T "~a~%" low)
-              (+ 3 (* (- 1 low) 12) (note-order-on-piano note)))
-             ((and high (< high 6))
-              (+ 27 (* high 12) (note-order-on-piano note)))
-             (T (invalid-key-notation-error key-string))))))))
+(defun german-notation->piano-key (key-string groups)
+  (unless key-string (invalid-key-notation-error key-string))
+  (let ((sharp-p (when (< 0 (length (aref groups 4))) (aref groups 4)))
+        (flat-p (when (< 0 (length (aref groups 5))) (aref groups 5)))
+        (low (when (< 0 (length (aref groups 2))) (length (aref groups 0))))
+        (high (when (< 0 (length (aref groups 3))) (length (aref groups 6)))))
+    (when (or (and high low) (and flat-p sharp-p))
+      (invalid-key-notation-error key-string))
+    (let ((note (string-upcase (if low (aref groups 2) (aref groups 3)))))
+      (round (+ (cond (flat-p -1) (sharp-p 1) (T 0))
+                (cond
+                  ((and low (= low 3)
+                        (string= "A" note)) 1)
+                  ((and low (= low 3)
+                        (string= "B" note)) 3)
+                  ((and high (= high 6)
+                        (string= "C" note)) 88)
+                  ((and low (< low 3))
+                   (format T "~a~%" low)
+                   (+ 3 (* (- 1 low) 12) (note-order-on-piano note)))
+                  ((and high (< high 6))
+                   (+ 27 (* high 12) (note-order-on-piano note)))
+                  (T (invalid-key-notation-error key-string))))))))
 
-(defun ensure-english-piano-key (key-string groups)
-  (when key-string
-    (let ((note (char (aref groups 0) 0))
-          (flat-p (when (< 0 (length (aref groups 1))) (aref groups 1)))
-          (sharp-p (when (< 0 (length (aref groups 2))) (aref groups 2)))
-          (octave (parse-integer (aref groups 3))))
-      (when (and flat-p sharp-p)
-        (invalid-key-notation-error key-string))
-      (+ (cond (flat-p -1) (sharp-p 1) (T 0))
-         (cond
-           ((= 0 octave)
-            (cond ((string= "A" note) 1)
-                  ((string= "B" note) 3)
-                  (T (invalid-key-notation-error key-string))))
-           ((= 8 octave)
-            (cond ((string= "C" note) 88)
-                  (T (invalid-key-notation-error key-string))))
-           (T (+ 3 (* (1- octave) 12) (note-order-on-piano note))))))))
+(defun english-notation->piano-key (key-string groups)
+  (unless key-string (invalid-key-notation-error key-string))
+  (let ((note (char (aref groups 0) 0))
+        (flat-p (when (< 0 (length (aref groups 1))) (aref groups 1)))
+        (sharp-p (when (< 0 (length (aref groups 2))) (aref groups 2)))
+        (octave (parse-integer (aref groups 3))))
+    (when (and flat-p sharp-p)
+      (invalid-key-notation-error key-string))
+    (round (+ (cond (flat-p -1) (sharp-p 1) (T 0))
+              (cond
+                ((= 0 octave)
+                 (cond ((string= "A" note) 1)
+                       ((string= "B" note) 3)
+                       (T (invalid-key-notation-error key-string))))
+                ((= 8 octave)
+                 (cond ((string= "C" note) 88)
+                       (T (invalid-key-notation-error key-string))))
+                (T (+ 3 (* (1- octave) 12) (note-order-on-piano note))))))))
 
-(defun ensure-piano-key (key)
-  (cond
-    ((typep key 'integer) key)
-    ((or (typep key 'string) (typep key 'symbol) (typep key 'keyword))
-     ;; Notation is the standard English piano notation ([A-G])([#sbf])?([0-8])
-     ;; where A-G is the note, # and s mean sharp, b and f mean flat, and 0-8 mean octave.
-     ;; This is then converted into standard piano key number that is from 1 to 88.
-     (let* ((key (format NIL "~a" key))
-            (piano-key (multiple-value-bind (key-string groups)
-                           (cl-ppcre:scan-to-strings *english-notation-regex* key)
-                         (if key-string
-                             (ensure-english-piano-key key-string groups)
-                             (multiple-value-bind (key-string groups)
-                                 (cl-ppcre:scan-to-strings *german-notation-regex* key)
-                               (unless (and key-string (< 0 (length key-string)))
-                                 (invalid-key-notation-error key))
-                               (ensure-german-piano-key key-string groups))))))
-       (unless piano-key (invalid-key-notation-error key))
-       piano-key))
-    (T (invalid-key-notation-error key))))
-
-(defun ensure-double-float (number)
-  (etypecase number
-    (double-float number)
-    (number (coerce number 'double-float))))
-
-(defun ensure-tuning (tuning)
-  (etypecase tuning
-    (symbol (case tuning
-              ((german austrian) 443.0d0)
-              (swiss 442.0d0)
-              (von-kajaran 444.0d0)
-              (T 440.0d0)))
-    (number (ensure-double-float tuning))))
+(defun notation->piano-key (note)
+  (unless (or (typep note 'string) (typep note 'symbol) (typep note 'keyword))
+    (invalid-key-notation-error note))
+  (let* ((note (format NIL "~a" note)))
+    (multiple-value-bind (key-string groups)
+        (cl-ppcre:scan-to-strings *english-notation-regex* note)
+      (if key-string
+          (english-notation->piano-key key-string groups)
+          (multiple-value-bind (key-string groups)
+              (cl-ppcre:scan-to-strings *german-notation-regex* note)
+            (unless (and key-string (< 0 (length key-string)))
+              (invalid-key-notation-error note))
+            (german-notation->piano-key key-string groups))))))
 
 (defun piano-key->pitch (key &key (tuning 440.0d0))
   (coerce (+ (- (ensure-tuning tuning) 440.0d0)
-             (* 440.0d0 (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
+             (* 440.0d0 (expt 2.0d0 (/ (- key 49.0d0) 12.0d0))))
           'single-float))
 
 (defun pitch->piano-key (pitch &key (tuning 440.0d0))
@@ -174,6 +167,9 @@
                    (floor (+ key 8) 12)
                    :sharp-p (find key-of-octave *black-keys-on-piano*)
                    :notation notation)))))
+
+(defun notation->pitch (note &key (tuning 440.0d0))
+  (round (piano-key->pitch (notation->piano-key note) :tuning tuning)))
 
 (defun pitch->notation (pitch &key (tuning 440.0d0) (notation 'english))
   (multiple-value-bind (key offset)
