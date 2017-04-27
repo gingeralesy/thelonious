@@ -40,7 +40,7 @@
   (loop with div = (/ (length waves))
         for spec in waves
         for wave = (normalize-wave-spec spec)
-        for frequency = (getf wave :frequency 440) then (getf wave :frequency frequency)
+        for frequency = (getf wave :frequency 440.0s0) then (getf wave :frequency frequency)
         for function = (getf wave :function #'sine-wave) then (getf wave :function function)
         for amplitude = (min 1.0s0 (max 0.0s0 (getf wave :amplitude 1.0s0)))
         then (min 1.0s0 (max 0.0s0 (getf wave :amplitude amplitude)))
