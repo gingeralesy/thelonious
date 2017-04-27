@@ -75,10 +75,10 @@
 
 (defun ensure-german-piano-key (key-string groups)
   (when key-string
-    (let ((sharp-p (aref groups 4))
-          (flat-p (aref groups 5))
-          (low (when (aref groups 2) (length (aref groups 0))))
-          (high (when (aref groups 3) (length (aref groups 6)))))
+    (let ((sharp-p (when (< 0 (length (aref groups 4))) (aref groups 4)))
+          (flat-p (when (< 0 (length (aref groups 5))) (aref groups 5)))
+          (low (when (< 0 (length (aref groups 2))) (length (aref groups 0))))
+          (high (when (< 0 (length (aref groups 3))) (length (aref groups 6)))))
       (when (or (and high low) (and flat-p sharp-p))
         (invalid-key-notation-error key-string))
       (let ((note (string-upcase (if low (aref groups 2) (aref groups 3)))))
@@ -100,9 +100,9 @@
 (defun ensure-english-piano-key (key-string groups)
   (when key-string
     (let ((note (char (aref groups 0) 0))
-          (flat-p (aref groups 1))
-          (sharp-p (aref groups 2))
-          (octave (aref groups 3)))
+          (flat-p (when (< 0 (length (aref groups 1))) (aref groups 1)))
+          (sharp-p (when (< 0 (length (aref groups 2))) (aref groups 2)))
+          (octave (parse-integer (aref groups 3))))
       (when (and flat-p sharp-p)
         (invalid-key-notation-error key-string))
       (+ (cond (flat-p -1) (sharp-p 1) (T 0))
@@ -142,17 +142,17 @@
     (double-float number)
     (number (coerce number 'double-float))))
 
-(defun ensure-pitch (pitch)
-  (etypecase pitch
-    (symbol (case pitch
+(defun ensure-tuning (tuning)
+  (etypecase tuning
+    (symbol (case tuning
               ((german austrian) 443.0d0)
               (swiss 442.0d0)
               (von-kajaran 444.0d0)
               (T 440.0d0)))
-    (number (ensure-double-float pitch))))
+    (number (ensure-double-float tuning))))
 
 (defun piano-key->pitch (key &key (tuning 440.0d0))
-  (coerce (+ (- (ensure-pitch tuning) 440.0d0)
+  (coerce (+ (- (ensure-tuning tuning) 440.0d0)
              (* 440.0d0 (expt 2.0d0 (/ (- (ensure-piano-key key) 49.0d0) 12.0d0))))
           'single-float))
 
