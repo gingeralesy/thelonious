@@ -30,16 +30,18 @@
 
 (defun note-order-from-piano (note)
   (unless (typep note 'integer) (error (format NIL "Invalid note number: ~a." note)))
-  (- note (length (loop for black in *black-keys-on-piano*
-                        until (< note black)
-                        collecting black))))
+  (- note (for:for ((black in *black-keys-on-piano*)
+                    (count counting black))
+            (while (<= black note))
+            (returning (1- count)))))
 
 (defun note-order-on-piano (note)
   (let ((note (typecase note
                 (integer note)
                 (T (note-order note)))))
-    (loop for black in *black-keys-on-piano*
-          when (<= black note) do (incf note))
+    (for:for ((black in *black-keys-on-piano*))
+      (when (<= black note) (incf note))
+      (until (< note black)))
     note))
 
 (defun note-from-order (number &key (notation 'english))
@@ -54,11 +56,6 @@
          (english #\B)
          (german #\H)))))
 
-(defun ensure-double-float (number)
-  (etypecase number
-    (double-float number)
-    (number (coerce number 'double-float))))
-
 (defun ensure-tuning (tuning)
   (etypecase tuning
     (symbol (case tuning
@@ -69,23 +66,29 @@
     (number (ensure-double-float tuning))))
 
 (defun notation (note octave &key flat-p sharp-p (notation 'english))
-  (ecase notation
-    (english (format NIL "~a~a~a"
-                     note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))
-    (german
-     (let ((sharpness (cond ((and flat-p (not (eql #\H note)))
-                             (if (or (eql #\A note) (eql #\E note)) "s" "es"))
-                            (sharp-p "is")
-                            (T ""))))
-       (if (< octave 3)
-           (format NIL "~{~a~}~:@(~a~)~a"
-                   (loop repeat (- 2 octave) collecting #\,)
-                   (if (and flat-p (eql note #\H)) #\B note)
-                   sharpness)
-           (format NIL "~(~a~)~a~{~a~}"
-                   (if (and flat-p (eql note #\H)) #\B note)
-                   sharpness
-                   (loop repeat (- octave 3) collecting #\’)))))))
+  (let ((note (ensure-char note))
+        (octave (ensure-integer octave)))
+    (ecase notation
+      (english (format NIL "~a~a~a"
+                       note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))
+      (german
+       (let ((sharpness (cond ((and flat-p (not (eql #\H note)))
+                               (if (or (eql #\A note) (eql #\E note)) "s" "es"))
+                              (sharp-p "is")
+                              (T ""))))
+         (if (< octave 3)
+             (format NIL "~{~a~}~:@(~a~)~a"
+                     (for:for ((i repeat (- 2 octave))
+                               (commas collecting #\,))
+                       (returning commas))
+                     (if (and flat-p (eql note #\H)) #\B note)
+                     sharpness)
+             (format NIL "~(~a~)~a~{~a~}"
+                     (if (and flat-p (eql note #\H)) #\B note)
+                     sharpness
+                     (for:for ((i repeat (- octave 3))
+                               (syms collecting #\’))
+                       (returning syms)))))))))
 
 (defun german-notation->piano-key (key-string groups)
   (unless key-string (invalid-key-notation-error key-string))
@@ -132,7 +135,7 @@
 (defun notation->piano-key (note)
   (unless (or (typep note 'string) (typep note 'symbol) (typep note 'keyword))
     (invalid-key-notation-error note))
-  (let* ((note (format NIL "~a" note)))
+  (let ((note (ensure-string note)))
     (multiple-value-bind (key-string groups)
         (cl-ppcre:scan-to-strings *english-notation-regex* note)
       (if (and key-string (< 0 (length key-string)))

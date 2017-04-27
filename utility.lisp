@@ -40,3 +40,23 @@
          (setf ,current (cdr ,current))
          (for:update ,var value))
        (for:end-for)))
+
+(defun ensure-string (val)
+  (format NIL "~a" val))
+
+(defun ensure-char (val)
+  (typecase val
+    (character val)
+    (T (char (ensure-string val) 0))))
+
+(defun ensure-integer (number)
+  (typecase number
+    (integer number)
+    (number (round number))
+    (T (parse-integer (ensure-string number)))))
+
+(defun ensure-double-float (number)
+  (etypecase number
+    (double-float number)
+    (number (coerce number 'double-float))
+    (string (coerce (ensure-integer number) 'double-float))))
