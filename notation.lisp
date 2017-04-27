@@ -85,7 +85,7 @@
            (format NIL "~(~a~)~a~{~a~}"
                    (if (and flat-p (eql note #\H)) #\B note)
                    sharpness
-                   (loop repeat (- octave 3) collecting #\´)))))))
+                   (loop repeat (- octave 3) collecting #\’)))))))
 
 (defun german-notation->piano-key (key-string groups)
   (unless key-string (invalid-key-notation-error key-string))
