@@ -4,16 +4,16 @@
   (cl-ppcre:create-scanner "^([A-G])([bf♭]?)([#s]?)([0-8])$" :case-insensitive-mode T))
 
 (defparameter *german-notation-regex*
-  (cl-ppcre:create-scanner "^(,{0,2})(([AC-H])|([ac-h]))(is)?(e?s)?(['’]{0,5})?$"
+  (cl-ppcre:create-scanner "^(,{0,2})(([A-H])|([a-h]))(is)?(e?s)?(['’´]{0,5})?$"
                            :case-insensitive-mode NIL))
 
 (defparameter *black-keys-on-piano* '(2 4 7 9 11))
 
 (define-condition invalid-key-notation-error (error)
-  ((text :initarg :text :reader text)))
+  ((key :initarg :key :reader key)))
 
 (defun invalid-key-notation-error (key)
-  (error 'invalid-key-notation-error :text (format NIL "No such key ~a." key)))
+  (error 'invalid-key-notation-error :key (format NIL "No such key ~a." key)))
 
 (defun note-order (note)
   (let ((note (etypecase note
@@ -73,11 +73,11 @@
     (english (format NIL "~a~a~a"
                      note (cond (flat-p #\u266D) (sharp-p #\#) (T "")) octave))
     (german
-     (if (< octave 3)
-         (let ((sharpness (cond ((and flat-p (not (eql #\H note)))
-                                 (if (or (eql #\A note) (eql #\E note)) "s" "es"))
-                                (sharp-p "is")
-                                (T ""))))
+     (let ((sharpness (cond ((and flat-p (not (eql #\H note)))
+                             (if (or (eql #\A note) (eql #\E note)) "s" "es"))
+                            (sharp-p "is")
+                            (T ""))))
+       (if (< octave 3)
            (format NIL "~{~a~}~:@(~a~)~a"
                    (loop repeat (- 2 octave) collecting #\,)
                    (if (and flat-p (eql note #\H)) #\B note)
@@ -96,20 +96,19 @@
     (when (or (and high low) (and flat-p sharp-p))
       (invalid-key-notation-error key-string))
     (let ((note (string-upcase (if low (aref groups 2) (aref groups 3)))))
-      (round (+ (cond (flat-p -1) (sharp-p 1) (T 0))
-                (cond
-                  ((and low (= low 3)
-                        (string= "A" note)) 1)
-                  ((and low (= low 3)
-                        (string= "B" note)) 3)
-                  ((and high (= high 6)
-                        (string= "C" note)) 88)
-                  ((and low (< low 3))
-                   (format T "~a~%" low)
-                   (+ 3 (* (- 1 low) 12) (note-order-on-piano note)))
-                  ((and high (< high 6))
-                   (+ 27 (* high 12) (note-order-on-piano note)))
-                  (T (invalid-key-notation-error key-string))))))))
+      (+ (cond (flat-p -1) (sharp-p 1) (T 0))
+         (cond
+           ((and low (= low 3) (string= "A" note))
+            1)
+           ((and low (= low 3) (string= "B" note))
+            3)
+           ((and high (= high 6) (string= "C" note))
+            88)
+           ((and low (< low 3))
+            (+ 3 (* (- 1 low) 12) (note-order-on-piano note)))
+           ((and high (< high 6))
+            (+ 27 (* high 12) (note-order-on-piano note)))
+           (T (invalid-key-notation-error key-string)))))))
 
 (defun english-notation->piano-key (key-string groups)
   (unless key-string (invalid-key-notation-error key-string))
@@ -119,16 +118,16 @@
         (octave (parse-integer (aref groups 3))))
     (when (and flat-p sharp-p)
       (invalid-key-notation-error key-string))
-    (round (+ (cond (flat-p -1) (sharp-p 1) (T 0))
-              (cond
-                ((= 0 octave)
-                 (cond ((string= "A" note) 1)
-                       ((string= "B" note) 3)
-                       (T (invalid-key-notation-error key-string))))
-                ((= 8 octave)
-                 (cond ((string= "C" note) 88)
-                       (T (invalid-key-notation-error key-string))))
-                (T (+ 3 (* (1- octave) 12) (note-order-on-piano note))))))))
+    (+ (cond (flat-p -1) (sharp-p 1) (T 0))
+       (cond
+         ((= 0 octave)
+          (cond ((string= "A" note) 1)
+                ((string= "B" note) 3)
+                (T (invalid-key-notation-error key-string))))
+         ((= 8 octave)
+          (cond ((string= "C" note) 88)
+                (T (invalid-key-notation-error key-string))))
+         (T (+ 3 (* (1- octave) 12) (note-order-on-piano note)))))))
 
 (defun notation->piano-key (note)
   (unless (or (typep note 'string) (typep note 'symbol) (typep note 'keyword))
@@ -136,7 +135,7 @@
   (let* ((note (format NIL "~a" note)))
     (multiple-value-bind (key-string groups)
         (cl-ppcre:scan-to-strings *english-notation-regex* note)
-      (if key-string
+      (if (and key-string (< 0 (length key-string)))
           (english-notation->piano-key key-string groups)
           (multiple-value-bind (key-string groups)
               (cl-ppcre:scan-to-strings *german-notation-regex* note)
@@ -157,19 +156,20 @@
 
 (defun piano-key->notation (key &key (notation 'english))
   (unless (<= 1 key 88) (error (format NIL "Invalid key: ~a" key)))
-  (cond
-    ((< key 4)
-     (notation (if (= key 3) #\B #\A) 0 :sharp-p (= key 2) :notation notation))
-    ((= key 88) (notation #\C 8 :notation notation))
-    (T (let ((key-of-octave (mod (- key 3) 12)))
-         (when (= 0 key-of-octave) (setf key-of-octave 12))
-         (notation (note-from-order (note-order-from-piano key-of-octave))
-                   (floor (+ key 8) 12)
-                   :sharp-p (find key-of-octave *black-keys-on-piano*)
-                   :notation notation)))))
+  (let ((note-b (ecase notation (english #\B) (german #\H))))
+    (cond
+      ((< key 4)
+       (notation (if (= key 3) note-b #\A) 0 :sharp-p (= key 2) :notation notation))
+      ((= key 88) (notation #\C 8 :notation notation))
+      (T (let ((key-of-octave (mod (- key 3) 12)))
+           (when (= 0 key-of-octave) (setf key-of-octave 12))
+           (notation (note-from-order (note-order-from-piano key-of-octave) :notation notation)
+                     (floor (+ key 8) 12)
+                     :sharp-p (find key-of-octave *black-keys-on-piano*)
+                     :notation notation))))))
 
 (defun notation->pitch (note &key (tuning 440.0d0))
-  (round (piano-key->pitch (notation->piano-key note) :tuning tuning)))
+  (piano-key->pitch (notation->piano-key note) :tuning tuning))
 
 (defun pitch->notation (pitch &key (tuning 440.0d0) (notation 'english))
   (multiple-value-bind (key offset)
