@@ -1,6 +1,6 @@
 (in-package #:cl-user)
 (defpackage #:thelonious
-  (:use #:cl)
+  (:use #:cl #:my-utils)
   (:export #:sine-wave
            #:square-wave
            #:triangle-wave
